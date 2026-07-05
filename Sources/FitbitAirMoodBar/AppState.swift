@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 import ServiceManagement
-import UserNotifications
+@preconcurrency import UserNotifications
 
 @MainActor
 final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelegate {
