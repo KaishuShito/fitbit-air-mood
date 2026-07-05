@@ -1,6 +1,7 @@
 # Fitbit Air Mood
+A tiny macOS menu bar app for quick mood and energy check-ins :)
 
-A tiny macOS menu bar app for quick mood and energy check-ins.
+<img width="800" height="573" alt="CleanShot 2026-07-05 at 17 54 53" src="https://github.com/user-attachments/assets/d1c64b23-0a0b-4282-b17a-86166061aac4" />
 
 Fitbit Air Mood records lightweight 1-5 mood and energy snapshots, appends them to a daily Markdown journal, stores structured history in SQLite, and can generate compact weekly insights. It is built with SwiftPM and AppKit.
 
