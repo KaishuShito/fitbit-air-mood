@@ -49,6 +49,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let statusSummaryItem = NSMenuItem(title: "No check-in yet today", action: nil, keyEquivalent: "")
     private let onPrimaryActivate: () -> Void
     private let onOpenWindow: () -> Void
+    private let onOpenInsights: () -> Void
+    private let onCheckForUpdates: () -> Void
     private let onOpenTodayJournal: () -> Void
     private let onWeeklyInsights: () -> Void
     private let onOpenDatabase: () -> Void
@@ -61,6 +63,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusSummaryProvider: @escaping () -> StatusItemSummary?,
         onPrimaryActivate: @escaping () -> Void,
         onOpenWindow: @escaping () -> Void,
+        onOpenInsights: @escaping () -> Void,
+        onCheckForUpdates: @escaping () -> Void,
         onOpenTodayJournal: @escaping () -> Void,
         onWeeklyInsights: @escaping () -> Void,
         onOpenDatabase: @escaping () -> Void,
@@ -71,6 +75,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.statusSummaryProvider = statusSummaryProvider
         self.onPrimaryActivate = onPrimaryActivate
         self.onOpenWindow = onOpenWindow
+        self.onOpenInsights = onOpenInsights
+        self.onCheckForUpdates = onCheckForUpdates
         self.onOpenTodayJournal = onOpenTodayJournal
         self.onWeeklyInsights = onWeeklyInsights
         self.onOpenDatabase = onOpenDatabase
@@ -110,6 +116,15 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         quickCheckInItem.keyEquivalentModifierMask = [.control, .option]
         quickCheckInItem.target = self
         menu.addItem(quickCheckInItem)
+
+        let insightsItem = NSMenuItem(title: "Insights…", action: #selector(openInsights), keyEquivalent: "i")
+        insightsItem.keyEquivalentModifierMask = [.command]
+        insightsItem.target = self
+        menu.addItem(insightsItem)
+
+        let checkForUpdatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        checkForUpdatesItem.target = self
+        menu.addItem(checkForUpdatesItem)
 
         menu.addItem(.separator())
 
@@ -182,6 +197,14 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func openWindow() {
         onOpenWindow()
+    }
+
+    @objc private func openInsights() {
+        onOpenInsights()
+    }
+
+    @objc private func checkForUpdates() {
+        onCheckForUpdates()
     }
 
     @objc private func openTodayJournal() {

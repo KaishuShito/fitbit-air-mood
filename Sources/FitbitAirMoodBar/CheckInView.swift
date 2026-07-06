@@ -273,6 +273,7 @@ struct CheckInView: View {
                 labels: EnergyLevel.allCases.map { ($0.id, $0.emoji, $0.label, $0.accessibilityLabel) }
             ) { level in
                 appState.draft.energy = EnergyLevel(rawValue: level) ?? .steady
+                focusNotesAfterLayout()
             }
 
             panelNotesSection
@@ -302,22 +303,6 @@ struct CheckInView: View {
                 .help("Open Full Window")
                 .accessibilityLabel("Open Full Window")
 
-                if !appState.isPanelNotesVisible && appState.draft.notes.isEmpty {
-                    Button {
-                        appState.isPanelNotesVisible = true
-                        focusNotesAfterLayout()
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                            .frame(width: 28, height: 28)
-                            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white.opacity(0.78))
-                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .help("Add Note")
-                    .accessibilityLabel("Add Note")
-                }
-
                 Spacer()
 
                 Button {
@@ -336,7 +321,7 @@ struct CheckInView: View {
                 .accessibilityLabel("Save Check-In")
             }
 
-            Text(appState.isPanelNotesFocused ? "⌘⏎ save · esc back to mood" : "1–5 select · ⇥ row · N note · ⏎ save · esc close")
+            Text(appState.isPanelNotesFocused ? "⌘⏎ save · esc back to scales" : "1–5 select · ⇥ row · N notes · ⏎ save · esc close")
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.4))
                 .lineLimit(1)
@@ -355,24 +340,21 @@ struct CheckInView: View {
         .environment(\.colorScheme, .dark)
     }
 
-    @ViewBuilder
     private var panelNotesSection: some View {
-        if appState.isPanelNotesVisible || !appState.draft.notes.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Notes")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.78))
-                NotesTextView(text: $appState.draft.notes, isDarkHUD: true, onFocusChange: { focused in
-                    appState.isPanelNotesFocused = focused
-                })
-                    .frame(height: 50)
-                    .padding(1)
-                    .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                    }
-            }
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Notes")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.78))
+            NotesTextView(text: $appState.draft.notes, isDarkHUD: true, onFocusChange: { focused in
+                appState.isPanelNotesFocused = focused
+            })
+                .frame(height: 50)
+                .padding(1)
+                .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                }
         }
     }
 

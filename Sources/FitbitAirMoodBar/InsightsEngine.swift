@@ -255,7 +255,7 @@ struct InsightsEngine {
         )
     }
 
-    private static func parseLocalDate(_ string: String, calendar: Calendar) -> Date? {
+    static func parseLocalDate(_ string: String, calendar: Calendar) -> Date? {
         let formatter = DateFormatter()
         formatter.calendar = calendar
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -273,7 +273,7 @@ struct InsightsEngine {
         return formatter.string(from: date)
     }
 
-    private static func pearsonCorrelation(_ pairs: [(Double, Double)]) -> Double? {
+    static func pearsonCorrelation(_ pairs: [(Double, Double)]) -> Double? {
         let count = Double(pairs.count)
         let meanX = pairs.map(\.0).reduce(0, +) / count
         let meanY = pairs.map(\.1).reduce(0, +) / count

@@ -399,11 +399,12 @@ struct FitbitAirMoodBarTests {
     }
 
     @Test
-    func panelDigitSetsEnergyWithoutAdvancing() {
+    func panelDigitSetsEnergyAndFocusesNotes() {
         let actions = PanelKeyRouter.actions(for: .digit(2), activeRow: .energy, notesFocused: false)
 
         #expect(actions == [
             .setValue(row: .energy, value: 2),
+            .focusNotes,
         ])
     }
 
@@ -418,12 +419,157 @@ struct FitbitAirMoodBarTests {
 
     @Test
     func panelNoteSaveAndEscapeRespectNotesFocus() {
-        #expect(PanelKeyRouter.actions(for: .note, activeRow: .mood, notesFocused: false) == [.revealNotes])
+        #expect(PanelKeyRouter.actions(for: .note, activeRow: .mood, notesFocused: false) == [.focusNotes])
         #expect(PanelKeyRouter.actions(for: .return, activeRow: .mood, notesFocused: false) == [.save])
         #expect(PanelKeyRouter.actions(for: .return, activeRow: .mood, notesFocused: true).isEmpty)
         #expect(PanelKeyRouter.actions(for: .commandReturn, activeRow: .mood, notesFocused: true) == [.saveFromNotes])
         #expect(PanelKeyRouter.actions(for: .escape, activeRow: .mood, notesFocused: true) == [.leaveNotes])
         #expect(PanelKeyRouter.actions(for: .escape, activeRow: .mood, notesFocused: false) == [.dismiss])
+    }
+
+    @Test
+    func insightsChartModelAveragesMultipleCheckInsPerDayAndSkipsMissingDays() {
+        let calendar = utcCalendar()
+        let checkIns = [
+            insightCheckIn("2026-06-24T09:00:00Z", localDate: "2026-06-24", mood: 4, energy: 2),
+            insightCheckIn("2026-06-24T20:00:00Z", localDate: "2026-06-24", mood: 2, energy: 4),
+            insightCheckIn("2026-06-26T13:00:00Z", localDate: "2026-06-26", mood: 5, energy: 5),
+        ]
+
+        let model = InsightsChartModel.make(
+            checkIns: checkIns,
+            snapshots: [],
+            days: 7,
+            referenceDate: date("2026-06-28T12:00:00Z")!,
+            calendar: calendar
+        )
+
+        #expect(model.totalCheckIns == 3)
+        #expect(model.hasData)
+        // Two days have data (06-24, 06-26); 06-25 and others have no fabricated points.
+        #expect(model.dailyAverages.map { InsightsEngine.localDateString(for: $0.date, calendar: calendar) } == ["2026-06-24", "2026-06-26"])
+        #expect(model.dailyAverages[0].mood == 3.0)
+        #expect(model.dailyAverages[0].energy == 3.0)
+        #expect(model.dailyAverages[1].mood == 5.0)
+    }
+
+    @Test
+    func insightsChartModelComputesGroupedBucketAverages() {
+        let model = InsightsChartModel.make(
+            checkIns: syntheticWeekCheckIns(),
+            snapshots: [],
+            days: 30,
+            referenceDate: date("2026-06-28T12:00:00Z")!,
+            calendar: utcCalendar()
+        )
+
+        #expect(model.bucketAverages == [
+            InsightsChartModel.BucketAverage(bucket: .morning, mood: 4.0, energy: 3.5),
+            InsightsChartModel.BucketAverage(bucket: .afternoon, mood: 4.0, energy: 3.5),
+            InsightsChartModel.BucketAverage(bucket: .evening, mood: 2.0, energy: 2.0),
+        ])
+    }
+
+    @Test
+    func insightsChartModelPairsSleepAndMoodWithCorrelationAboveFive() {
+        let calendar = utcCalendar()
+        let snapshots = [
+            snapshot("2026-06-22", sleepPerformance: 70),
+            snapshot("2026-06-23", sleepPerformance: 60),
+            snapshot("2026-06-24", sleepPerformance: 90),
+            snapshot("2026-06-25", sleepPerformance: 80),
+            snapshot("2026-06-26", sleepPerformance: 50),
+            snapshot("2026-06-27", sleepPerformance: 65),
+        ]
+
+        let model = InsightsChartModel.make(
+            checkIns: syntheticWeekCheckIns(),
+            snapshots: snapshots,
+            days: 30,
+            referenceDate: date("2026-06-28T12:00:00Z")!,
+            calendar: calendar
+        )
+
+        #expect(model.sleepMoodPoints.count == 6)
+        #expect(model.hasEnoughSleepPairs)
+        #expect((model.correlation ?? 0) > 0.98)
+        // Points are sorted by date and carry the day's mood average.
+        #expect(model.sleepMoodPoints.first?.sleep == 70)
+        #expect(model.sleepMoodPoints.first?.mood == 3.5)
+    }
+
+    @Test
+    func insightsChartModelOmitsCorrelationBelowFivePairedDays() {
+        let snapshots = [
+            snapshot("2026-06-22", sleepPerformance: 70),
+            snapshot("2026-06-24", sleepPerformance: 90),
+            snapshot("2026-06-26", sleepPerformance: 50),
+        ]
+
+        let model = InsightsChartModel.make(
+            checkIns: syntheticWeekCheckIns(),
+            snapshots: snapshots,
+            days: 30,
+            referenceDate: date("2026-06-28T12:00:00Z")!,
+            calendar: utcCalendar()
+        )
+
+        #expect(model.sleepMoodPoints.count == 3)
+        #expect(!model.hasEnoughSleepPairs)
+        #expect(model.correlation == nil)
+    }
+
+    @Test
+    func insightsChartModelFiltersByRangeWindow() {
+        let calendar = utcCalendar()
+        let reference = date("2026-06-28T12:00:00Z")!
+
+        let sevenDay = InsightsChartModel.make(
+            checkIns: syntheticWeekCheckIns(),
+            snapshots: [],
+            days: 7,
+            referenceDate: reference,
+            calendar: calendar
+        )
+        let thirtyDay = InsightsChartModel.make(
+            checkIns: syntheticWeekCheckIns(),
+            snapshots: [],
+            days: 30,
+            referenceDate: reference,
+            calendar: calendar
+        )
+
+        // 7-day window ends 06-28 and starts 06-22, so all seven synthetic days are in range.
+        #expect(sevenDay.totalCheckIns == 7)
+        #expect(thirtyDay.totalCheckIns == 7)
+
+        // A tighter 3-day window (06-26..06-28) keeps only the later check-ins.
+        let threeDay = InsightsChartModel.make(
+            checkIns: syntheticWeekCheckIns(),
+            snapshots: [],
+            days: 3,
+            referenceDate: reference,
+            calendar: calendar
+        )
+        #expect(threeDay.totalCheckIns == 2)
+        #expect(threeDay.dailyAverages.map { InsightsEngine.localDateString(for: $0.date, calendar: calendar) } == ["2026-06-26", "2026-06-27"])
+    }
+
+    @Test
+    func insightsChartModelReportsEmptyRange() {
+        let model = InsightsChartModel.make(
+            checkIns: syntheticWeekCheckIns(),
+            snapshots: [],
+            days: 7,
+            referenceDate: date("2026-08-15T12:00:00Z")!,
+            calendar: utcCalendar()
+        )
+
+        #expect(model.totalCheckIns == 0)
+        #expect(!model.hasData)
+        #expect(model.dailyAverages.isEmpty)
+        #expect(model.bucketAverages.isEmpty)
+        #expect(model.sleepMoodPoints.isEmpty)
     }
 
     private func syntheticWeekCheckIns() -> [InsightCheckIn] {

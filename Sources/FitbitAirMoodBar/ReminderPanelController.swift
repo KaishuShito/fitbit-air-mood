@@ -289,8 +289,7 @@ final class ReminderPanelController: NSWindowController, NSWindowDelegate {
                 appState.changePanelValue(row: row, delta: delta)
             case .setActiveRow(let row):
                 appState.panelActiveRow = row
-            case .revealNotes:
-                appState.isPanelNotesVisible = true
+            case .focusNotes:
                 focusNotesAfterLayout()
             case .save, .saveFromNotes:
                 appState.saveCheckIn(fromPanel: true)

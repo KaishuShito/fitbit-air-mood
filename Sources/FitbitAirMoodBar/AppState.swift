@@ -36,7 +36,6 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var isSaving = false
     @Published var isSyncingFitbit = false
     @Published var panelActiveRow: PanelActiveRow = .mood
-    @Published var isPanelNotesVisible = false
     @Published var isPanelNotesFocused = false
 
     private static let quietHourlyRemindersKey = "quietHourlyReminders"
@@ -55,6 +54,7 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
     private var lastReminderBucket: String?
     private var isSyncingLaunchAtLogin = false
     private var openMainWindowHandler: (() -> Void)?
+    private var openInsightsWindowHandler: (() -> Void)?
     private var toggleQuickCheckInHandler: (() -> Void)?
     private var presentReminderPanelHandler: (() -> Void)?
     private var dismissReminderPanelHandler: (() -> Void)?
@@ -245,11 +245,13 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     func bindPresentationHandlers(
         openMainWindow: @escaping () -> Void,
+        openInsightsWindow: @escaping () -> Void,
         toggleQuickCheckIn: @escaping () -> Void,
         presentReminderPanel: @escaping () -> Void,
         dismissReminderPanel: @escaping () -> Void
     ) {
         openMainWindowHandler = openMainWindow
+        openInsightsWindowHandler = openInsightsWindow
         toggleQuickCheckInHandler = toggleQuickCheckIn
         presentReminderPanelHandler = presentReminderPanel
         dismissReminderPanelHandler = dismissReminderPanel
@@ -258,6 +260,29 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
     func openMainWindow() {
         dismissReminderPanel()
         openMainWindowHandler?()
+    }
+
+    func openInsightsWindow() {
+        dismissReminderPanel()
+        openInsightsWindowHandler?()
+    }
+
+    func insightsChartData(days: Int) -> InsightsChartModel {
+        let calendar = Calendar.current
+        let referenceDate = Date()
+        let endDay = calendar.startOfDay(for: referenceDate)
+        let startDay = calendar.date(byAdding: .day, value: -(max(1, days) - 1), to: endDay) ?? endDay
+        let startLocalDate = InsightsEngine.localDateString(for: startDay, calendar: calendar)
+        let endLocalDate = InsightsEngine.localDateString(for: endDay, calendar: calendar)
+        let checkIns = (try? database.checkIns(from: startLocalDate, through: endLocalDate)) ?? []
+        let snapshots = (try? database.fitbitSnapshots(from: startLocalDate, through: endLocalDate)) ?? []
+        return InsightsChartModel.make(
+            checkIns: checkIns,
+            snapshots: snapshots,
+            days: days,
+            referenceDate: referenceDate,
+            calendar: calendar
+        )
     }
 
     func toggleQuickCheckIn() {
@@ -288,7 +313,6 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     func preparePanelCheckIn() {
         panelActiveRow = .mood
-        isPanelNotesVisible = !draft.notes.isEmpty
         isPanelNotesFocused = false
     }
 

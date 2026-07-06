@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Build app bundle
+        run: FITBIT_AIR_MOODBAR_SKIP_LAUNCH=1 bash scripts/build_and_run.sh
+
+      - name: Zip app bundle
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/FitbitAirMoodBar.app" FitbitAirMood.zip
+
+      - name: Download Sparkle tools
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p sparkle-tools
+          gh release download 2.9.4 \
+            --repo sparkle-project/Sparkle \
+            --pattern 'Sparkle-2.9.4.tar.xz' \
+            --dir sparkle-tools
+          tar -xJf sparkle-tools/Sparkle-2.9.4.tar.xz -C sparkle-tools
+          test -x sparkle-tools/bin/sign_update
+
+      - name: Generate appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          private_key_file="$(mktemp)"
+          cleanup() {
+            rm -f "$private_key_file"
+          }
+          trap cleanup EXIT
+          printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$private_key_file"
+          chmod 600 "$private_key_file"
+
+          signature_output="$(sparkle-tools/bin/sign_update --ed-key-file "$private_key_file" FitbitAirMood.zip)"
+          ed_signature="$(printf '%s\n' "$signature_output" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')"
+          zip_length="$(printf '%s\n' "$signature_output" | sed -n 's/.*length="\([^"]*\)".*/\1/p')"
+          if [[ -z "$ed_signature" || -z "$zip_length" ]]; then
+            echo "error: could not parse Sparkle signature output" >&2
+            exit 1
+          fi
+
+          info_plist="dist/FitbitAirMoodBar.app/Contents/Info.plist"
+          bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist")"
+          short_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$info_plist")"
+          min_system="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$info_plist")"
+          tag="${GITHUB_REF_NAME}"
+          pub_date="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S %z')"
+          asset_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/FitbitAirMood.zip"
+
+          cat > appcast.xml <<XML
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Fitbit Air Mood Updates</title>
+              <link>https://github.com/${GITHUB_REPOSITORY}</link>
+              <description>Fitbit Air Mood release feed</description>
+              <item>
+                <title>Fitbit Air Mood ${short_version}</title>
+                <pubDate>${pub_date}</pubDate>
+                <sparkle:version>${bundle_version}</sparkle:version>
+                <sparkle:shortVersionString>${short_version}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>${min_system}</sparkle:minimumSystemVersion>
+                <enclosure
+                  url="${asset_url}"
+                  sparkle:edSignature="${ed_signature}"
+                  length="${zip_length}"
+                  type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          XML
+          xmllint --noout appcast.xml
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          gh release create "$tag" FitbitAirMood.zip appcast.xml \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$tag" \
+            --notes "Fitbit Air Mood ${tag}"

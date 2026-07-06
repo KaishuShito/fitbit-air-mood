@@ -104,9 +104,9 @@ enum FitbitCLIRunnerError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .projectRootMissing:
-            return "Project root was not detected. Rebuild the app from the repository or set FITBIT_AIR_JOURNAL_PROJECT_DIR."
+            return "Project root was not detected. Rebuild the app from the repository."
         case .executableMissing(let path):
-            return "fitbit-air-cli is not executable at \(path). Install the optional CLI or set FITBIT_AIR_JOURNAL_PROJECT_DIR to a workspace that has dist/fitbit-air-cli."
+            return "fitbit-air-cli is not executable at \(path). Run go build first."
         case .launchFailed(let message):
             return "Couldn't launch fitbit-air-cli: \(message)"
         case .commandFailed(let status, let message):

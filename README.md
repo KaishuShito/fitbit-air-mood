@@ -22,6 +22,20 @@ This project is not affiliated with or endorsed by Fitbit, Google, or Apple.
 - macOS 14 or newer.
 - Xcode command line tools with Swift 6 support.
 
+## Install
+
+Download the latest `FitbitAirMood.zip` from [Releases](https://github.com/KaishuShito/fitbit-air-mood/releases/latest), unzip it, and move the app wherever you like.
+
+On first launch, macOS may ask for an extra confirmation because the app is not notarized yet. Right-click the app and choose Open, or run:
+
+```bash
+xattr -d com.apple.quarantine "/path/to/FitbitAirMoodBar.app"
+```
+
+## Updates
+
+The app checks for updates automatically with Sparkle. You can also choose `Check for Updates…` from the menu bar menu.
+
 ## Build
 
 ```bash

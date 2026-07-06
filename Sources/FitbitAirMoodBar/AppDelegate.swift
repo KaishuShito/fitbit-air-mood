@@ -1,10 +1,17 @@
 import AppKit
+import Sparkle
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let appState = AppState.shared
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
     private var statusItemController: StatusItemController?
     private var mainWindowController: MainWindowController?
+    private var insightsWindowController: InsightsWindowController?
     private var reminderPanelController: ReminderPanelController?
     private var hotKeyCenter: HotKeyCenter?
 
@@ -13,6 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.bindPresentationHandlers(
             openMainWindow: { [weak self] in
                 self?.openMainWindow()
+            },
+            openInsightsWindow: { [weak self] in
+                self?.openInsightsWindow()
             },
             toggleQuickCheckIn: { [weak self] in
                 self?.toggleQuickCheckIn()
@@ -34,6 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onOpenWindow: { [weak self] in
                 self?.appState.openMainWindow()
+            },
+            onOpenInsights: { [weak self] in
+                self?.appState.openInsightsWindow()
+            },
+            onCheckForUpdates: { [weak self] in
+                self?.checkForUpdates()
             },
             onOpenTodayJournal: { [weak self] in
                 self?.appState.openTodayJournal()
@@ -75,6 +91,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.showWindowAndActivate()
     }
 
+    private func openInsightsWindow() {
+        ensureInsightsWindowController().showWindowAndActivate()
+    }
+
+    private func checkForUpdates() {
+        updaterController.checkForUpdates(nil)
+    }
+
     private func toggleQuickCheckIn() {
         if let mainWindowController, mainWindowController.isVisible {
             mainWindowController.showWindowAndActivate()
@@ -106,6 +130,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let controller = MainWindowController(appState: appState)
         mainWindowController = controller
+        return controller
+    }
+
+    private func ensureInsightsWindowController() -> InsightsWindowController {
+        if let insightsWindowController {
+            return insightsWindowController
+        }
+
+        let controller = InsightsWindowController(appState: appState)
+        insightsWindowController = controller
         return controller
     }
 

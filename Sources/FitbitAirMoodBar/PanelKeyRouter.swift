@@ -22,7 +22,7 @@ enum PanelKeyAction: Equatable {
     case setValue(row: PanelActiveRow, value: Int)
     case changeValue(row: PanelActiveRow, delta: Int)
     case setActiveRow(PanelActiveRow)
-    case revealNotes
+    case focusNotes
     case save
     case saveFromNotes
     case leaveNotes
@@ -37,6 +37,8 @@ struct PanelKeyRouter {
             var actions: [PanelKeyAction] = [.setValue(row: activeRow, value: value)]
             if activeRow == .mood {
                 actions.append(.setActiveRow(.energy))
+            } else {
+                actions.append(.focusNotes)
             }
             return actions
         case .tab, .up, .down:
@@ -50,7 +52,7 @@ struct PanelKeyRouter {
             return [.changeValue(row: activeRow, delta: 1)]
         case .note:
             guard !notesFocused else { return [] }
-            return [.revealNotes]
+            return [.focusNotes]
         case .return:
             guard !notesFocused else { return [] }
             return [.save]
