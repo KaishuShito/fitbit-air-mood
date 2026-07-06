@@ -41,7 +41,8 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
     private static let quietHourlyRemindersKey = "quietHourlyReminders"
     private static let reminderEnabledKey = "hourlyReminderEnabled"
     private static let lastInsightsISOWeekKey = "lastInsightsISOWeek"
-    private static let hourlyReminderNotificationIdentifier = "mood-checkin-hourly"
+    private nonisolated static let lastCheckInAtKey = "lastCheckInAt"
+    private nonisolated static let hourlyReminderNotificationIdentifier = "mood-checkin-hourly"
     private static let manualReminderNotificationPrefix = "mood-checkin-manual-"
     private let notificationCenter = UNUserNotificationCenter.current()
     private let loginService = SMAppService.mainApp
@@ -109,6 +110,7 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
             errorMessage = nil
             journalDirectoryDisplay = journalDirectory.path
             didSaveCheckIn = true
+            UserDefaults.standard.set(checkIn.recordedAt.timeIntervalSince1970, forKey: Self.lastCheckInAtKey)
             checkInsDidChange?()
             if fromPanel {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
@@ -524,8 +526,18 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
         guard bucket != lastReminderBucket else { return }
         lastReminderBucket = bucket
 
+        guard !ReminderSuppression.shouldSuppress(lastCheckInAt: Self.storedLastCheckInAt(), now: Date()) else {
+            return
+        }
+
         presentReminderPanel()
         checkInsDidChange?()
+    }
+
+    nonisolated static func storedLastCheckInAt() -> Date? {
+        let stored = UserDefaults.standard.double(forKey: lastCheckInAtKey)
+        guard stored > 0 else { return nil }
+        return Date(timeIntervalSince1970: stored)
     }
 
     private func scheduleHourlyNotification() {
@@ -572,7 +584,11 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner]
+        if notification.request.identifier == Self.hourlyReminderNotificationIdentifier,
+           ReminderSuppression.shouldSuppress(lastCheckInAt: Self.storedLastCheckInAt(), now: Date()) {
+            return []
+        }
+        return [.banner]
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
@@ -601,6 +617,16 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(bytes))
+    }
+}
+
+struct ReminderSuppression {
+    static let windowMinutes = 45
+
+    static func shouldSuppress(lastCheckInAt: Date?, now: Date) -> Bool {
+        guard let lastCheckInAt else { return false }
+        let elapsedMinutes = now.timeIntervalSince(lastCheckInAt) / 60
+        return elapsedMinutes >= 0 && elapsedMinutes < Double(windowMinutes)
     }
 }
 

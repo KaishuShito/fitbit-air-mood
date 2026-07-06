@@ -240,6 +240,18 @@ struct FitbitAirMoodBarTests {
     }
 
     @Test
+    func recentCheckInSuppressesHourlyReminder() {
+        let now = Date(timeIntervalSince1970: 1_780_286_400)
+
+        #expect(!ReminderSuppression.shouldSuppress(lastCheckInAt: nil, now: now))
+        #expect(ReminderSuppression.shouldSuppress(lastCheckInAt: now.addingTimeInterval(-10 * 60), now: now))
+        #expect(ReminderSuppression.shouldSuppress(lastCheckInAt: now.addingTimeInterval(-44 * 60), now: now))
+        #expect(!ReminderSuppression.shouldSuppress(lastCheckInAt: now.addingTimeInterval(-45 * 60), now: now))
+        #expect(!ReminderSuppression.shouldSuppress(lastCheckInAt: now.addingTimeInterval(-90 * 60), now: now))
+        #expect(!ReminderSuppression.shouldSuppress(lastCheckInAt: now.addingTimeInterval(5 * 60), now: now))
+    }
+
+    @Test
     func insightsEngineComputesWeeklyStats() throws {
         let calendar = utcCalendar()
         let checkIns = syntheticWeekCheckIns()

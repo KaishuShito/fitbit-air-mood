@@ -143,7 +143,7 @@ struct InsightsView: View {
             }
             .chartForegroundStyleScale(seriesColors)
             .chartXScale(domain: model.bucketAverages.map(\.bucket.rawValue))
-            .chartYScale(domain: 1...5)
+            .chartYScale(domain: 0...5)
             .chartYAxis {
                 AxisMarks(values: [1, 2, 3, 4, 5])
             }
