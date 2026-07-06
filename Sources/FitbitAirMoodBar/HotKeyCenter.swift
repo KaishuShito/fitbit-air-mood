@@ -2,20 +2,26 @@ import Carbon
 import Foundation
 
 final class HotKeyCenter: @unchecked Sendable {
-    private static let signature: OSType = 0x4641_4D42
-    private static let toggleQuickCheckInID: UInt32 = 1
+    struct Registration {
+        let keyCode: UInt32
+        let modifiers: UInt32
+        let action: @MainActor () -> Void
+    }
 
-    private let action: @MainActor () -> Void
-    private var hotKeyRef: EventHotKeyRef?
+    static let controlOption = UInt32(controlKey | optionKey)
+
+    private static let signature: OSType = 0x4641_4D42
+
+    private var actions: [UInt32: @MainActor () -> Void] = [:]
+    private var hotKeyRefs: [EventHotKeyRef] = []
     private var handlerRef: EventHandlerRef?
 
-    init(action: @escaping @MainActor () -> Void) {
-        self.action = action
-        register()
+    init(registrations: [Registration]) {
+        register(registrations)
     }
 
     deinit {
-        if let hotKeyRef {
+        for hotKeyRef in hotKeyRefs {
             UnregisterEventHotKey(hotKeyRef)
         }
         if let handlerRef {
@@ -23,7 +29,7 @@ final class HotKeyCenter: @unchecked Sendable {
         }
     }
 
-    private func register() {
+    private func register(_ registrations: [Registration]) {
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
@@ -39,19 +45,28 @@ final class HotKeyCenter: @unchecked Sendable {
         )
         guard installStatus == noErr else { return }
 
-        let hotKeyID = EventHotKeyID(signature: Self.signature, id: Self.toggleQuickCheckInID)
-        let keyCodeM: UInt32 = 46
-        RegisterEventHotKey(
-            keyCodeM,
-            UInt32(controlKey | optionKey),
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &hotKeyRef
-        )
+        for (index, registration) in registrations.enumerated() {
+            let id = UInt32(index + 1)
+            actions[id] = registration.action
+
+            let hotKeyID = EventHotKeyID(signature: Self.signature, id: id)
+            var hotKeyRef: EventHotKeyRef?
+            let status = RegisterEventHotKey(
+                registration.keyCode,
+                registration.modifiers,
+                hotKeyID,
+                GetApplicationEventTarget(),
+                0,
+                &hotKeyRef
+            )
+            if status == noErr, let hotKeyRef {
+                hotKeyRefs.append(hotKeyRef)
+            }
+        }
     }
 
-    private func invoke() {
+    private func invoke(id: UInt32) {
+        guard let action = actions[id] else { return }
         Task { @MainActor in
             action()
         }
@@ -66,8 +81,22 @@ final class HotKeyCenter: @unchecked Sendable {
             return OSStatus(eventNotHandledErr)
         }
 
+        var hotKeyID = EventHotKeyID()
+        let status = GetEventParameter(
+            event,
+            EventParamName(kEventParamDirectObject),
+            EventParamType(typeEventHotKeyID),
+            nil,
+            MemoryLayout<EventHotKeyID>.size,
+            nil,
+            &hotKeyID
+        )
+        guard status == noErr else {
+            return OSStatus(eventNotHandledErr)
+        }
+
         let center = Unmanaged<HotKeyCenter>.fromOpaque(userData).takeUnretainedValue()
-        center.invoke()
+        center.invoke(id: hotKeyID.id)
         return noErr
     }
 }

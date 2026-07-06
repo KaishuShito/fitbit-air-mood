@@ -51,6 +51,15 @@ final class SQLiteStore {
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         """)
+        try execute("""
+        CREATE TABLE IF NOT EXISTS quick_notes (
+            id TEXT PRIMARY KEY,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            journal_saved_at TEXT NULL
+        );
+        """)
         try compact()
     }
 
@@ -345,6 +354,140 @@ final class SQLiteStore {
         return Int(sqlite3_column_int(statement, 0))
     }
 
+    func insertQuickNote(_ note: QuickNote) throws {
+        let sql = """
+        INSERT INTO quick_notes (id, content, created_at, updated_at, journal_saved_at)
+        VALUES (?, ?, ?, ?, ?);
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw lastSQLiteError()
+        }
+        defer { sqlite3_finalize(statement) }
+
+        sqlite3_bind_text(statement, 1, note.id, -1, transientDestructor)
+        sqlite3_bind_text(statement, 2, note.content, -1, transientDestructor)
+        sqlite3_bind_text(statement, 3, note.createdAt, -1, transientDestructor)
+        sqlite3_bind_text(statement, 4, note.updatedAt, -1, transientDestructor)
+        if let journalSavedAt = note.journalSavedAt {
+            sqlite3_bind_text(statement, 5, journalSavedAt, -1, transientDestructor)
+        } else {
+            sqlite3_bind_null(statement, 5)
+        }
+
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw lastSQLiteError()
+        }
+    }
+
+    func updateQuickNoteContent(id: String, content: String, updatedAt: String) throws {
+        let sql = "UPDATE quick_notes SET content = ?, updated_at = ? WHERE id = ?;"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw lastSQLiteError()
+        }
+        defer { sqlite3_finalize(statement) }
+
+        sqlite3_bind_text(statement, 1, content, -1, transientDestructor)
+        sqlite3_bind_text(statement, 2, updatedAt, -1, transientDestructor)
+        sqlite3_bind_text(statement, 3, id, -1, transientDestructor)
+
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw lastSQLiteError()
+        }
+    }
+
+    func markQuickNoteJournalSaved(id: String, journalSavedAt: String) throws {
+        let sql = "UPDATE quick_notes SET journal_saved_at = ? WHERE id = ?;"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw lastSQLiteError()
+        }
+        defer { sqlite3_finalize(statement) }
+
+        sqlite3_bind_text(statement, 1, journalSavedAt, -1, transientDestructor)
+        sqlite3_bind_text(statement, 2, id, -1, transientDestructor)
+
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw lastSQLiteError()
+        }
+    }
+
+    func deleteQuickNote(id: String) throws {
+        let sql = "DELETE FROM quick_notes WHERE id = ?;"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw lastSQLiteError()
+        }
+        defer { sqlite3_finalize(statement) }
+
+        sqlite3_bind_text(statement, 1, id, -1, transientDestructor)
+
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw lastSQLiteError()
+        }
+    }
+
+    func quickNotes() throws -> [QuickNote] {
+        let sql = """
+        SELECT id, content, created_at, updated_at, journal_saved_at
+        FROM quick_notes
+        ORDER BY updated_at DESC, created_at DESC;
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw lastSQLiteError()
+        }
+        defer { sqlite3_finalize(statement) }
+
+        var notes: [QuickNote] = []
+        while true {
+            let result = sqlite3_step(statement)
+            if result == SQLITE_DONE {
+                return notes
+            }
+            guard result == SQLITE_ROW else {
+                throw lastSQLiteError()
+            }
+            guard
+                let idCString = sqlite3_column_text(statement, 0),
+                let contentCString = sqlite3_column_text(statement, 1),
+                let createdAtCString = sqlite3_column_text(statement, 2),
+                let updatedAtCString = sqlite3_column_text(statement, 3)
+            else {
+                continue
+            }
+
+            let journalSavedAt = sqlite3_column_text(statement, 4).map { String(cString: $0) }
+            notes.append(QuickNote(
+                id: String(cString: idCString),
+                content: String(cString: contentCString),
+                createdAt: String(cString: createdAtCString),
+                updatedAt: String(cString: updatedAtCString),
+                journalSavedAt: journalSavedAt
+            ))
+        }
+    }
+
+    func mostRecentlyUpdatedQuickNote() throws -> QuickNote? {
+        try quickNotes().first
+    }
+
+    func quickNoteCount() throws -> Int {
+        let sql = "SELECT COUNT(*) FROM quick_notes;"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw lastSQLiteError()
+        }
+        defer { sqlite3_finalize(statement) }
+
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            throw lastSQLiteError()
+        }
+
+        return Int(sqlite3_column_int(statement, 0))
+    }
+
     private func execute(_ sql: String) throws {
         guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else {
             throw lastSQLiteError()
@@ -404,6 +547,28 @@ private let transientDestructor = unsafeBitCast(-1, to: sqlite3_destructor_type.
 struct FitbitSnapshotLink: Equatable {
     let localDateString: String
     let ageMinutes: Int
+}
+
+struct QuickNote: Identifiable, Equatable {
+    let id: String
+    var content: String
+    let createdAt: String
+    var updatedAt: String
+    var journalSavedAt: String?
+
+    var displayTitle: String {
+        Self.displayTitle(for: content)
+    }
+
+    // The first non-blank line is the note's title (Raycast convention); a note
+    // that is empty or all whitespace falls back to "Untitled".
+    static func displayTitle(for content: String) -> String {
+        let firstNonBlankLine = content
+            .split(whereSeparator: \.isNewline)
+            .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard let firstNonBlankLine else { return "Untitled" }
+        return firstNonBlankLine.trimmingCharacters(in: .whitespaces)
+    }
 }
 
 struct SQLiteError: LocalizedError {

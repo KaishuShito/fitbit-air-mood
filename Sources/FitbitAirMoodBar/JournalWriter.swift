@@ -12,6 +12,13 @@ struct JournalWriter {
         return try append(section: markdown, localDateString: localDateString, createdAt: createdAt, to: journalDirectory)
     }
 
+    func append(quickNote content: String, at date: Date, to journalDirectory: URL) throws -> URL {
+        let localDateString = Self.localDateString(for: date)
+        let createdAt = Self.iso8601String(for: date)
+        let section = "### 📝 Note \(Self.localTimeString(for: date))\n\n\(content)"
+        return try append(section: section, localDateString: localDateString, createdAt: createdAt, to: journalDirectory)
+    }
+
     private func append(section: String, localDateString: String, createdAt: String, to journalDirectory: URL) throws -> URL {
         try FileManager.default.createDirectory(at: journalDirectory, withIntermediateDirectories: true)
 
@@ -71,6 +78,15 @@ struct JournalWriter {
         formatter.locale = .current
         formatter.timeZone = .current
         formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    private static func localTimeString(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = .current
+        formatter.locale = .current
+        formatter.timeZone = .current
+        formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
     }
 

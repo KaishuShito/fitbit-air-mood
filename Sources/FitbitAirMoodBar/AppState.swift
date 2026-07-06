@@ -57,9 +57,16 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
     private var openMainWindowHandler: (() -> Void)?
     private var openInsightsWindowHandler: (() -> Void)?
     private var toggleQuickCheckInHandler: (() -> Void)?
+    private var toggleQuickNoteHandler: (() -> Void)?
     private var presentReminderPanelHandler: (() -> Void)?
     private var dismissReminderPanelHandler: (() -> Void)?
     var checkInsDidChange: (() -> Void)?
+
+    lazy var quickNoteModel: QuickNoteModel = QuickNoteModel(
+        store: database,
+        journalWriter: journalWriter,
+        journalDirectoryProvider: { [weak self] in self?.resolution.journalDirectory }
+    )
 
     override init() {
         quietHourlyReminders = UserDefaults.standard.object(forKey: Self.quietHourlyRemindersKey) as? Bool ?? false
@@ -249,12 +256,14 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
         openMainWindow: @escaping () -> Void,
         openInsightsWindow: @escaping () -> Void,
         toggleQuickCheckIn: @escaping () -> Void,
+        toggleQuickNote: @escaping () -> Void,
         presentReminderPanel: @escaping () -> Void,
         dismissReminderPanel: @escaping () -> Void
     ) {
         openMainWindowHandler = openMainWindow
         openInsightsWindowHandler = openInsightsWindow
         toggleQuickCheckInHandler = toggleQuickCheckIn
+        toggleQuickNoteHandler = toggleQuickNote
         presentReminderPanelHandler = presentReminderPanel
         dismissReminderPanelHandler = dismissReminderPanel
     }
@@ -289,6 +298,10 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     func toggleQuickCheckIn() {
         toggleQuickCheckInHandler?()
+    }
+
+    func toggleQuickNote() {
+        toggleQuickNoteHandler?()
     }
 
     func presentReminderPanel() {

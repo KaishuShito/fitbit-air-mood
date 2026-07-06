@@ -3,16 +3,33 @@ import SwiftUI
 
 extension Notification.Name {
     static let fitbitAirMoodBarFocusNotes = Notification.Name("fitbitAirMoodBarFocusNotes")
+    static let fitbitAirMoodBarFocusQuickNote = Notification.Name("fitbitAirMoodBarFocusQuickNote")
 }
 
 struct NotesTextView: NSViewRepresentable {
     @Binding var text: String
     let isDarkHUD: Bool
+    let placeholder: String?
+    let fontSize: CGFloat
+    let contentInset: CGFloat
+    let focusNotification: Notification.Name
     let onFocusChange: ((Bool) -> Void)?
 
-    init(text: Binding<String>, isDarkHUD: Bool = false, onFocusChange: ((Bool) -> Void)? = nil) {
+    init(
+        text: Binding<String>,
+        isDarkHUD: Bool = false,
+        placeholder: String? = nil,
+        fontSize: CGFloat = NSFont.systemFontSize,
+        contentInset: CGFloat = 6,
+        focusNotification: Notification.Name = .fitbitAirMoodBarFocusNotes,
+        onFocusChange: ((Bool) -> Void)? = nil
+    ) {
         self._text = text
         self.isDarkHUD = isDarkHUD
+        self.placeholder = placeholder
+        self.fontSize = fontSize
+        self.contentInset = contentInset
+        self.focusNotification = focusNotification
         self.onFocusChange = onFocusChange
     }
 
@@ -29,9 +46,10 @@ struct NotesTextView: NSViewRepresentable {
 
         let textView = CommandFriendlyTextView()
         textView.onFocusChange = onFocusChange
+        textView.placeholderString = placeholder
         textView.delegate = context.coordinator
         textView.string = text
-        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
+        textView.font = .systemFont(ofSize: fontSize)
         textView.textColor = .labelColor
         textView.insertionPointColor = .labelColor
         textView.drawsBackground = false
@@ -42,7 +60,7 @@ struct NotesTextView: NSViewRepresentable {
         textView.allowsUndo = true
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
-        textView.textContainerInset = NSSize(width: 6, height: 6)
+        textView.textContainerInset = NSSize(width: contentInset, height: contentInset)
         textView.minSize = NSSize(width: 0, height: 0)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.isVerticallyResizable = true
@@ -53,21 +71,23 @@ struct NotesTextView: NSViewRepresentable {
 
         scrollView.documentView = textView
         context.coordinator.textView = textView
-        context.coordinator.installFocusObserver()
+        context.coordinator.installFocusObserver(name: focusNotification)
         configure(scrollView, textView: textView)
 
         return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView else {
+        guard let textView = scrollView.documentView as? CommandFriendlyTextView else {
             return
         }
 
         if textView.string != text {
             textView.string = text
+            textView.needsDisplay = true
         }
 
+        textView.placeholderString = placeholder
         context.coordinator.text = $text
         context.coordinator.textView = textView
         configure(scrollView, textView: textView)
@@ -91,7 +111,7 @@ struct NotesTextView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         weak var textView: NSTextView?
-        private var isObservingFocus = false
+        private var focusNotificationName: Notification.Name?
 
         init(text: Binding<String>) {
             self.text = text
@@ -99,20 +119,20 @@ struct NotesTextView: NSViewRepresentable {
         }
 
         deinit {
-            if isObservingFocus {
+            if focusNotificationName != nil {
                 NotificationCenter.default.removeObserver(self)
             }
         }
 
-        func installFocusObserver() {
-            guard !isObservingFocus else { return }
+        func installFocusObserver(name: Notification.Name) {
+            guard focusNotificationName == nil else { return }
+            focusNotificationName = name
             NotificationCenter.default.addObserver(
                 self,
                 selector: #selector(handleFocusNotes),
-                name: .fitbitAirMoodBarFocusNotes,
+                name: name,
                 object: nil
             )
-            isObservingFocus = true
         }
 
         func focusTextView() {
@@ -129,12 +149,30 @@ struct NotesTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             text.wrappedValue = textView.string
+            textView.needsDisplay = true
         }
     }
 }
 
 private final class CommandFriendlyTextView: NSTextView {
     var onFocusChange: ((Bool) -> Void)?
+    var placeholderString: String?
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        guard string.isEmpty, let placeholderString, !placeholderString.isEmpty else { return }
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .foregroundColor: NSColor.placeholderTextColor,
+            .font: font ?? .systemFont(ofSize: NSFont.systemFontSize),
+        ]
+        let origin = NSPoint(
+            x: textContainerInset.width + (textContainer?.lineFragmentPadding ?? 0),
+            y: textContainerInset.height
+        )
+        placeholderString.draw(at: origin, withAttributes: attributes)
+    }
 
     override func becomeFirstResponder() -> Bool {
         let accepted = super.becomeFirstResponder()

@@ -584,6 +584,123 @@ struct FitbitAirMoodBarTests {
         #expect(model.sleepMoodPoints.isEmpty)
     }
 
+    @Test
+    func quickNotesCRUDAndMigrationIdempotency() throws {
+        let tempDir = try makeTempDir()
+        let databaseURL = tempDir.appendingPathComponent("checkins.sqlite3")
+
+        do {
+            let store = try SQLiteStore(databaseURL: databaseURL)
+            #expect(try store.quickNoteCount() == 0)
+
+            try store.insertQuickNote(QuickNote(
+                id: "note-1",
+                content: "First note",
+                createdAt: "2026-07-06T09:00:00.000+09:00",
+                updatedAt: "2026-07-06T09:00:00.000+09:00",
+                journalSavedAt: nil
+            ))
+            #expect(try store.quickNoteCount() == 1)
+            #expect(try store.quickNotes().first?.content == "First note")
+            #expect(try store.quickNotes().first?.journalSavedAt == nil)
+
+            try store.updateQuickNoteContent(
+                id: "note-1",
+                content: "First note, edited",
+                updatedAt: "2026-07-06T09:05:00.000+09:00"
+            )
+            #expect(try store.quickNotes().first?.content == "First note, edited")
+
+            try store.markQuickNoteJournalSaved(id: "note-1", journalSavedAt: "2026-07-06T09:06:00.000+09:00")
+            #expect(try store.quickNotes().first?.journalSavedAt == "2026-07-06T09:06:00.000+09:00")
+
+            try store.deleteQuickNote(id: "note-1")
+            #expect(try store.quickNoteCount() == 0)
+        }
+
+        // Reopening runs the additive migration again without failing or losing the table.
+        let reopened = try SQLiteStore(databaseURL: databaseURL)
+        #expect(try reopened.quickNoteCount() == 0)
+        try reopened.insertQuickNote(QuickNote(
+            id: "note-2",
+            content: "After reopen",
+            createdAt: "2026-07-06T10:00:00.000+09:00",
+            updatedAt: "2026-07-06T10:00:00.000+09:00",
+            journalSavedAt: nil
+        ))
+        #expect(try reopened.quickNoteCount() == 1)
+    }
+
+    @Test
+    func quickNotesReturnMostRecentlyUpdatedFirst() throws {
+        let tempDir = try makeTempDir()
+        let databaseURL = tempDir.appendingPathComponent("checkins.sqlite3")
+        let store = try SQLiteStore(databaseURL: databaseURL)
+
+        try store.insertQuickNote(QuickNote(
+            id: "older",
+            content: "Older",
+            createdAt: "2026-07-06T08:00:00.000+09:00",
+            updatedAt: "2026-07-06T08:00:00.000+09:00",
+            journalSavedAt: nil
+        ))
+        try store.insertQuickNote(QuickNote(
+            id: "newer",
+            content: "Newer",
+            createdAt: "2026-07-06T07:00:00.000+09:00",
+            updatedAt: "2026-07-06T09:30:00.000+09:00",
+            journalSavedAt: nil
+        ))
+
+        #expect(try store.quickNotes().map(\.id) == ["newer", "older"])
+        #expect(try store.mostRecentlyUpdatedQuickNote()?.id == "newer")
+    }
+
+    @Test
+    func journalWriterAppendsQuickNoteAndPreservesExistingContent() throws {
+        let tempDir = try makeTempDir()
+        let writer = JournalWriter()
+        let noteDate = try #require(date("2026-07-06T04:07:00Z"))
+        let localDate = InsightsEngine.localDateString(for: noteDate)
+        let fileURL = tempDir.appendingPathComponent("\(localDate).md")
+        try "Existing journal text\n".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let writtenURL = try writer.append(quickNote: "Buy milk\nAnd eggs", at: noteDate, to: tempDir)
+        let text = try String(contentsOf: writtenURL, encoding: .utf8)
+
+        let expectedTime = localTimeString(for: noteDate)
+        #expect(writtenURL == fileURL)
+        #expect(text.hasPrefix("Existing journal text\n\n"))
+        #expect(text.contains("### 📝 Note \(expectedTime)\n\nBuy milk\nAnd eggs"))
+        #expect(text.hasSuffix("Buy milk\nAnd eggs\n"))
+    }
+
+    @Test
+    func quickNoteDisplayTitleUsesFirstNonBlankLineOrUntitled() {
+        #expect(QuickNote.displayTitle(for: "First line\nSecond line") == "First line")
+        #expect(QuickNote.displayTitle(for: "\n\n  \nReal title\nmore") == "Real title")
+        #expect(QuickNote.displayTitle(for: "  Padded title  \nbody") == "Padded title")
+        #expect(QuickNote.displayTitle(for: "") == "Untitled")
+        #expect(QuickNote.displayTitle(for: "   \n\t\n  ") == "Untitled")
+    }
+
+    @Test
+    func quickNoteWordCountCountsWhitespaceSeparatedTokens() {
+        #expect(QuickNoteModel.wordCount(in: "") == 0)
+        #expect(QuickNoteModel.wordCount(in: "   \n ") == 0)
+        #expect(QuickNoteModel.wordCount(in: "hello") == 1)
+        #expect(QuickNoteModel.wordCount(in: "hello  world\nthird") == 3)
+    }
+
+    private func localTimeString(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = .current
+        formatter.locale = .current
+        formatter.timeZone = .current
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
+    }
+
     private func syntheticWeekCheckIns() -> [InsightCheckIn] {
         [
             insightCheckIn("2026-06-22T06:00:00Z", localDate: "2026-06-22", mood: 3, energy: 2),

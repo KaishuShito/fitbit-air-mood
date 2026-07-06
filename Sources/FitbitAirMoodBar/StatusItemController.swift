@@ -48,6 +48,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let menu = NSMenu()
     private let statusSummaryItem = NSMenuItem(title: "No check-in yet today", action: nil, keyEquivalent: "")
     private let onPrimaryActivate: () -> Void
+    private let onQuickNote: () -> Void
     private let onOpenWindow: () -> Void
     private let onOpenInsights: () -> Void
     private let onCheckForUpdates: () -> Void
@@ -62,6 +63,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     init(
         statusSummaryProvider: @escaping () -> StatusItemSummary?,
         onPrimaryActivate: @escaping () -> Void,
+        onQuickNote: @escaping () -> Void,
         onOpenWindow: @escaping () -> Void,
         onOpenInsights: @escaping () -> Void,
         onCheckForUpdates: @escaping () -> Void,
@@ -74,6 +76,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     ) {
         self.statusSummaryProvider = statusSummaryProvider
         self.onPrimaryActivate = onPrimaryActivate
+        self.onQuickNote = onQuickNote
         self.onOpenWindow = onOpenWindow
         self.onOpenInsights = onOpenInsights
         self.onCheckForUpdates = onCheckForUpdates
@@ -116,6 +119,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         quickCheckInItem.keyEquivalentModifierMask = [.control, .option]
         quickCheckInItem.target = self
         menu.addItem(quickCheckInItem)
+
+        let quickNoteItem = NSMenuItem(title: "Quick Note", action: #selector(quickNote), keyEquivalent: "n")
+        quickNoteItem.keyEquivalentModifierMask = [.control, .option]
+        quickNoteItem.target = self
+        menu.addItem(quickNoteItem)
 
         let insightsItem = NSMenuItem(title: "Insights…", action: #selector(openInsights), keyEquivalent: "i")
         insightsItem.keyEquivalentModifierMask = [.command]
@@ -193,6 +201,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             button.image = nil
             button.title = "M"
         }
+    }
+
+    @objc private func quickNote() {
+        onQuickNote()
     }
 
     @objc private func openWindow() {

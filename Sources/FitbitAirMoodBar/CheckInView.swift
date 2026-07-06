@@ -332,12 +332,23 @@ struct CheckInView: View {
         .padding(.bottom, 14)
         .frame(width: panelWidth, height: panelHeight, alignment: .top)
         .background {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
+            Self.panelShape
                 .fill(Color.black)
                 .shadow(color: Color.black.opacity(0.34), radius: 18, x: 0, y: 10)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .clipShape(Self.panelShape)
         .environment(\.colorScheme, .dark)
+    }
+
+    // Square top corners: the panel reads as sliding out from the notch/menu bar.
+    private static var panelShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: 30,
+            bottomTrailingRadius: 30,
+            topTrailingRadius: 0,
+            style: .continuous
+        )
     }
 
     private var panelNotesSection: some View {

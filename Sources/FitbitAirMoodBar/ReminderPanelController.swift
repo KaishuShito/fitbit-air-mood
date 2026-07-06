@@ -61,12 +61,23 @@ final class ReminderPanelController: NSWindowController, NSWindowDelegate {
     func showPanel() {
         appState.preparePanelCheckIn()
         positionPanel()
+        let targetFrame = panel.frame
+        var startFrame = targetFrame
+        startFrame.origin.y += targetFrame.height * 0.85
+        panel.setFrame(startFrame, display: false)
+        panel.alphaValue = 0
         showWindow(nil)
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         // The always-visible notes NSTextView is the first key view, so AppKit
         // focuses it when the panel becomes key; digits must go to the Mood row.
         panel.makeFirstResponder(nil)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.22
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().setFrame(targetFrame, display: true)
+            panel.animator().alphaValue = 1
+        }
         installKeyMonitor()
     }
 
@@ -92,7 +103,7 @@ final class ReminderPanelController: NSWindowController, NSWindowDelegate {
         let topY = usesCameraHousing ? (screen?.frame.maxY ?? visibleFrame.maxY) : visibleFrame.maxY
         let origin = NSPoint(
             x: clamped(centerX - (panelSize.width / 2), min: visibleFrame.minX + 12, max: visibleFrame.maxX - panelSize.width - 12),
-            y: usesCameraHousing ? topY - panelSize.height : topY - panelSize.height - 10
+            y: topY - panelSize.height
         )
         panel.setFrame(NSRect(origin: origin, size: panelSize), display: false)
     }

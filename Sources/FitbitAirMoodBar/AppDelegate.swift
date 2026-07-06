@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mainWindowController: MainWindowController?
     private var insightsWindowController: InsightsWindowController?
     private var reminderPanelController: ReminderPanelController?
+    private var quickNoteWindowController: QuickNoteWindowController?
     private var hotKeyCenter: HotKeyCenter?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -26,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             toggleQuickCheckIn: { [weak self] in
                 self?.toggleQuickCheckIn()
+            },
+            toggleQuickNote: { [weak self] in
+                self?.toggleQuickNote()
             },
             presentReminderPanel: { [weak self] in
                 self?.presentReminderPanel()
@@ -41,6 +45,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onPrimaryActivate: { [weak self] in
                 self?.appState.toggleQuickCheckIn()
+            },
+            onQuickNote: { [weak self] in
+                self?.appState.toggleQuickNote()
             },
             onOpenWindow: { [weak self] in
                 self?.appState.openMainWindow()
@@ -73,10 +80,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appState.checkInsDidChange = { [weak self] in
             self?.statusItemController?.refresh()
         }
-        hotKeyCenter = HotKeyCenter { [weak self] in
-            self?.appState.toggleQuickCheckIn()
-        }
+        hotKeyCenter = HotKeyCenter(registrations: [
+            HotKeyCenter.Registration(keyCode: 46, modifiers: HotKeyCenter.controlOption) { [weak self] in
+                self?.appState.toggleQuickCheckIn()
+            },
+            HotKeyCenter.Registration(keyCode: 45, modifiers: HotKeyCenter.controlOption) { [weak self] in
+                self?.appState.toggleQuickNote()
+            },
+        ])
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        quickNoteWindowController?.flushPendingEdits()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -107,6 +123,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         appState.clearTransientCheckInMessages()
         ensureReminderPanelController().togglePanel()
+    }
+
+    private func toggleQuickNote() {
+        ensureQuickNoteWindowController().toggle()
     }
 
     private func presentReminderPanel() {
@@ -150,6 +170,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let controller = ReminderPanelController(appState: appState)
         reminderPanelController = controller
+        return controller
+    }
+
+    private func ensureQuickNoteWindowController() -> QuickNoteWindowController {
+        if let quickNoteWindowController {
+            return quickNoteWindowController
+        }
+
+        let controller = QuickNoteWindowController(model: appState.quickNoteModel)
+        quickNoteWindowController = controller
         return controller
     }
 }
