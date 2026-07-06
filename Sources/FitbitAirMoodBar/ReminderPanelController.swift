@@ -64,6 +64,9 @@ final class ReminderPanelController: NSWindowController, NSWindowDelegate {
         showWindow(nil)
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        // The always-visible notes NSTextView is the first key view, so AppKit
+        // focuses it when the panel becomes key; digits must go to the Mood row.
+        panel.makeFirstResponder(nil)
         installKeyMonitor()
     }
 
