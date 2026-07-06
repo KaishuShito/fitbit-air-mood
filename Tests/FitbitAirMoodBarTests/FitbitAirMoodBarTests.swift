@@ -692,6 +692,60 @@ struct FitbitAirMoodBarTests {
         #expect(QuickNoteModel.wordCount(in: "hello  world\nthird") == 3)
     }
 
+    @Test
+    func listSelectionMoveClampsAtBothEndsWithoutWrapping() {
+        // Down at the last row stays put; up at the first row stays put.
+        #expect(ListSelection.move(2, by: 1, count: 3) == 2)
+        #expect(ListSelection.move(0, by: -1, count: 3) == 0)
+        // Movement inside the range advances by one.
+        #expect(ListSelection.move(0, by: 1, count: 3) == 1)
+        #expect(ListSelection.move(2, by: -1, count: 3) == 1)
+        // Larger deltas clamp rather than overshoot.
+        #expect(ListSelection.move(0, by: 5, count: 3) == 2)
+        #expect(ListSelection.move(2, by: -5, count: 3) == 0)
+    }
+
+    @Test
+    func listSelectionClampResolvesEmptyAndOutOfRange() {
+        #expect(ListSelection.clamp(5, count: 0) == 0)
+        #expect(ListSelection.clamp(-3, count: 4) == 0)
+        #expect(ListSelection.clamp(9, count: 4) == 3)
+        #expect(ListSelection.clamp(2, count: 4) == 2)
+    }
+
+    @Test
+    func listSelectionAfterDeleteAdjustsToNearestValidRow() {
+        // Deleting the selected middle row keeps the slot (next row moves up).
+        #expect(ListSelection.afterDelete(selected: 1, deletedIndex: 1, newCount: 3) == 1)
+        // Deleting the selected last row moves selection to the new last row.
+        #expect(ListSelection.afterDelete(selected: 3, deletedIndex: 3, newCount: 3) == 2)
+        // Deleting a row above the caret shifts the caret up by one.
+        #expect(ListSelection.afterDelete(selected: 2, deletedIndex: 0, newCount: 3) == 1)
+        // Deleting a row below the caret leaves it untouched.
+        #expect(ListSelection.afterDelete(selected: 1, deletedIndex: 2, newCount: 3) == 1)
+        // Deleting the only row resolves to 0.
+        #expect(ListSelection.afterDelete(selected: 0, deletedIndex: 0, newCount: 0) == 0)
+    }
+
+    @Test
+    func quickNoteActionsAreContextDependentOnDeletableNote() {
+        #expect(QuickNoteAction.available(hasDeletableNote: false) == [
+            .newNote, .browseNotes, .saveToJournal, .closeWindow,
+        ])
+        #expect(QuickNoteAction.available(hasDeletableNote: true) == [
+            .newNote, .browseNotes, .saveToJournal, .deleteNote, .closeWindow,
+        ])
+    }
+
+    @Test
+    func quickNoteActionsFilterMatchesTitleAndShortcut() {
+        let all = QuickNoteAction.available(hasDeletableNote: true)
+        #expect(QuickNoteAction.filtered(all, query: "") == all)
+        #expect(QuickNoteAction.filtered(all, query: "save") == [.saveToJournal])
+        #expect(QuickNoteAction.filtered(all, query: "⌘P") == [.browseNotes])
+        #expect(QuickNoteAction.filtered(all, query: "zzz").isEmpty)
+    }
+
     private func localTimeString(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.calendar = .current

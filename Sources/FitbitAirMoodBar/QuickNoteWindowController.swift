@@ -58,6 +58,9 @@ final class QuickNoteWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func show() {
+        model.requestCloseWindow = { [weak self] in
+            self?.hide()
+        }
         model.prepareForDisplay()
         showWindow(nil)
         panel.makeKeyAndOrderFront(nil)
@@ -114,6 +117,7 @@ final class QuickNoteWindowController: NSWindowController, NSWindowDelegate {
 
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let characters = event.charactersIgnoringModifiers?.lowercased()
+        let overlayOpen = model.isBrowsing || model.isShowingActions
 
         if flags == .command {
             switch characters {
@@ -126,24 +130,48 @@ final class QuickNoteWindowController: NSWindowController, NSWindowDelegate {
             case "p":
                 model.toggleBrowsing()
                 return nil
+            case "k":
+                model.toggleActions()
+                return nil
             default:
-                return event
+                break
             }
+
+            // ⌘⌫ deletes the keyboard-selected note in the browse overlay.
+            if event.keyCode == 51, model.isBrowsing {
+                model.deleteSelectedNote()
+                return nil
+            }
+            return event
         }
 
         guard flags.subtracting(.shift).isEmpty else { return event }
 
         switch event.keyCode {
-        case 53: // esc
-            if model.isBrowsing {
+        case 53: // esc — close the open overlay first, otherwise the window.
+            if model.isShowingActions {
+                model.toggleActions()
+            } else if model.isBrowsing {
                 model.toggleBrowsing()
             } else {
                 hide()
             }
             return nil
-        case 36: // return
-            if model.isBrowsing {
-                model.openFirstFilteredNote()
+        case 125: // down arrow
+            if overlayOpen {
+                model.moveSelection(by: 1)
+                return nil
+            }
+            return event
+        case 126: // up arrow
+            if overlayOpen {
+                model.moveSelection(by: -1)
+                return nil
+            }
+            return event
+        case 36: // return — activate the selected row while an overlay is open.
+            if overlayOpen {
+                model.activateSelection()
                 return nil
             }
             return event

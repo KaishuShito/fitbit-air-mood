@@ -11,8 +11,22 @@ final class QuickNoteModel: ObservableObject {
     @Published var content: String = ""
     @Published var currentNoteID: String?
     @Published var isBrowsing = false
-    @Published var searchText = ""
+    @Published var isShowingActions = false
+    @Published var searchText = "" {
+        didSet {
+            if searchText != oldValue { selectionIndex = 0 }
+        }
+    }
+    @Published var paletteQuery = "" {
+        didSet {
+            if paletteQuery != oldValue { selectionIndex = 0 }
+        }
+    }
+    @Published var selectionIndex = 0
     @Published private(set) var footerMessage: FooterMessage?
+
+    // Set by the window controller so the "Close Window" action can reach the panel.
+    var requestCloseWindow: (() -> Void)?
 
     private let store: SQLiteStore
     private let journalWriter: JournalWriter
@@ -47,12 +61,33 @@ final class QuickNoteModel: ObservableObject {
         return notes.filter { $0.content.lowercased().contains(query) }
     }
 
+    var hasDeletableNote: Bool {
+        notes.contains { $0.id != currentNoteID }
+    }
+
+    var availableActions: [QuickNoteAction] {
+        QuickNoteAction.available(hasDeletableNote: hasDeletableNote)
+    }
+
+    var filteredActions: [QuickNoteAction] {
+        QuickNoteAction.filtered(availableActions, query: paletteQuery)
+    }
+
+    private var activeSelectionCount: Int {
+        if isShowingActions { return filteredActions.count }
+        if isBrowsing { return filteredNotes.count }
+        return 0
+    }
+
     // MARK: - Lifecycle
 
     func prepareForDisplay() {
         reloadNotes()
         isBrowsing = false
+        isShowingActions = false
         searchText = ""
+        paletteQuery = ""
+        selectionIndex = 0
         clearFeedback()
 
         if let mostRecent = notes.first {
@@ -83,22 +118,20 @@ final class QuickNoteModel: ObservableObject {
     func newNote() {
         persistCurrent()
         startFreshNote()
-        isBrowsing = false
+        closeOverlays()
         clearFeedback()
     }
 
     func openNote(id: String) {
         guard id != currentNoteID else {
-            isBrowsing = false
-            searchText = ""
+            closeOverlays()
             return
         }
         persistCurrent()
         guard let note = notes.first(where: { $0.id == id }) else { return }
         currentNoteID = id
         content = note.content
-        isBrowsing = false
-        searchText = ""
+        closeOverlays()
         clearFeedback()
     }
 
@@ -108,17 +141,106 @@ final class QuickNoteModel: ObservableObject {
         guard id != currentNoteID else { return }
         try? store.deleteQuickNote(id: id)
         reloadNotes()
+        if isBrowsing {
+            selectionIndex = ListSelection.clamp(selectionIndex, count: filteredNotes.count)
+        }
     }
 
-    func openFirstFilteredNote() {
-        guard let first = filteredNotes.first else { return }
-        openNote(id: first.id)
-    }
+    // MARK: - Overlays and selection
 
     func toggleBrowsing() {
-        isBrowsing.toggle()
-        if !isBrowsing {
-            searchText = ""
+        if isBrowsing {
+            closeOverlays()
+        } else {
+            openBrowse()
+        }
+    }
+
+    func openBrowse() {
+        isShowingActions = false
+        paletteQuery = ""
+        searchText = ""
+        isBrowsing = true
+        selectionIndex = 0
+    }
+
+    func toggleActions() {
+        if isShowingActions {
+            isShowingActions = false
+            paletteQuery = ""
+        } else {
+            openActions()
+        }
+    }
+
+    func openActions() {
+        isBrowsing = false
+        searchText = ""
+        paletteQuery = ""
+        isShowingActions = true
+        selectionIndex = 0
+    }
+
+    func closeOverlays() {
+        isBrowsing = false
+        isShowingActions = false
+        searchText = ""
+        paletteQuery = ""
+    }
+
+    func moveSelection(by delta: Int) {
+        selectionIndex = ListSelection.move(selectionIndex, by: delta, count: activeSelectionCount)
+    }
+
+    func activateSelection() {
+        if isShowingActions {
+            activateSelectedAction()
+        } else if isBrowsing {
+            openSelectedNote()
+        }
+    }
+
+    func openSelectedNote() {
+        guard filteredNotes.indices.contains(selectionIndex) else { return }
+        openNote(id: filteredNotes[selectionIndex].id)
+    }
+
+    func deleteSelectedNote() {
+        guard isBrowsing, filteredNotes.indices.contains(selectionIndex) else { return }
+        let note = filteredNotes[selectionIndex]
+        guard note.id != currentNoteID else {
+            showFeedback(FooterMessage(text: "The open note can't be deleted", isError: true))
+            return
+        }
+        let deletedIndex = selectionIndex
+        try? store.deleteQuickNote(id: note.id)
+        reloadNotes()
+        selectionIndex = ListSelection.afterDelete(
+            selected: selectionIndex,
+            deletedIndex: deletedIndex,
+            newCount: filteredNotes.count
+        )
+    }
+
+    func activateSelectedAction() {
+        guard filteredActions.indices.contains(selectionIndex) else { return }
+        execute(filteredActions[selectionIndex])
+    }
+
+    func execute(_ action: QuickNoteAction) {
+        switch action {
+        case .newNote:
+            newNote()
+        case .browseNotes:
+            openBrowse()
+        case .saveToJournal:
+            closeOverlays()
+            saveToJournal()
+        case .deleteNote:
+            // Deletion needs a chosen target, so route into the browse list.
+            openBrowse()
+        case .closeWindow:
+            requestCloseWindow?()
         }
     }
 

@@ -3,6 +3,7 @@ import SwiftUI
 struct QuickNoteView: View {
     @ObservedObject var model: QuickNoteModel
     @FocusState private var searchFocused: Bool
+    @FocusState private var paletteFocused: Bool
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -11,9 +12,13 @@ struct QuickNoteView: View {
             if model.isBrowsing {
                 browseOverlay
                     .transition(.opacity)
+            } else if model.isShowingActions {
+                actionsOverlay
+                    .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.12), value: model.isBrowsing)
+        .animation(.easeOut(duration: 0.12), value: model.isShowingActions)
         .background(Color(nsColor: .textBackgroundColor))
     }
 
@@ -46,6 +51,16 @@ struct QuickNoteView: View {
             }
             .buttonStyle(.plain)
             .help("Browse notes (⌘P)")
+
+            Button {
+                model.toggleActions()
+            } label: {
+                Text("⌘K")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Show all actions (⌘K)")
 
             Spacer(minLength: 8)
 
@@ -93,36 +108,36 @@ struct QuickNoteView: View {
         model.footerMessage?.isError ?? false
     }
 
+    // MARK: - Browse overlay
+
     private var browseOverlay: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search notes", text: $model.searchText)
-                    .textFieldStyle(.plain)
-                    .focused($searchFocused)
-                    .onSubmit {
-                        model.openFirstFilteredNote()
-                    }
+            searchField(
+                placeholder: "Search notes",
+                text: $model.searchText,
+                icon: "magnifyingglass",
+                focus: $searchFocused
+            ) {
+                model.openSelectedNote()
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
 
             Divider()
 
             if model.filteredNotes.isEmpty {
-                Spacer()
-                Text(model.notes.isEmpty ? "No notes yet" : "No matches")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Spacer()
+                overlayEmptyState(model.notes.isEmpty ? "No notes yet" : "No matches")
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(model.filteredNotes) { note in
-                            browseRow(note)
-                            Divider()
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(model.filteredNotes.enumerated()), id: \.element.id) { index, note in
+                                browseRow(note, isSelected: index == model.selectionIndex)
+                                    .id(note.id)
+                                Divider()
+                            }
                         }
+                    }
+                    .onChange(of: model.selectionIndex) {
+                        scrollToSelectedNote(proxy)
                     }
                 }
             }
@@ -133,7 +148,7 @@ struct QuickNoteView: View {
         }
     }
 
-    private func browseRow(_ note: QuickNote) -> some View {
+    private func browseRow(_ note: QuickNote, isSelected: Bool) -> some View {
         let isCurrent = note.id == model.currentNoteID
         return HStack(alignment: .top, spacing: 10) {
             Button {
@@ -175,7 +190,118 @@ struct QuickNoteView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(isCurrent ? Color.accentColor.opacity(0.08) : Color.clear)
+        .background(rowBackground(isSelected: isSelected, isCurrent: isCurrent))
+    }
+
+    // MARK: - Actions palette
+
+    private var actionsOverlay: some View {
+        VStack(spacing: 0) {
+            searchField(
+                placeholder: "Search actions",
+                text: $model.paletteQuery,
+                icon: "command",
+                focus: $paletteFocused
+            ) {
+                model.activateSelectedAction()
+            }
+
+            Divider()
+
+            if model.filteredActions.isEmpty {
+                overlayEmptyState("No matching actions")
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(model.filteredActions.enumerated()), id: \.element.id) { index, action in
+                            actionRow(action, isSelected: index == model.selectionIndex)
+                            Divider()
+                        }
+                    }
+                }
+            }
+        }
+        .background(.regularMaterial)
+        .onAppear {
+            paletteFocused = true
+        }
+    }
+
+    private func actionRow(_ action: QuickNoteAction, isSelected: Bool) -> some View {
+        Button {
+            model.execute(action)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: action.systemImage)
+                    .frame(width: 18)
+                    .foregroundStyle(.secondary)
+                Text(action.title)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Text(action.shortcut)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(rowBackground(isSelected: isSelected, isCurrent: false))
+    }
+
+    // MARK: - Shared overlay pieces
+
+    private func searchField(
+        placeholder: String,
+        text: Binding<String>,
+        icon: String,
+        focus: FocusState<Bool>.Binding,
+        onSubmit: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(.secondary)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.plain)
+                .focused(focus)
+                .onSubmit(onSubmit)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+
+    private func overlayEmptyState(_ message: String) -> some View {
+        VStack {
+            Spacer()
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // Keyboard selection wins over any hover state, so the selected row carries
+    // the strongest tint; the open note keeps only a faint marker underneath.
+    private func rowBackground(isSelected: Bool, isCurrent: Bool) -> Color {
+        if isSelected {
+            return Color.accentColor.opacity(0.22)
+        }
+        if isCurrent {
+            return Color.accentColor.opacity(0.06)
+        }
+        return Color.clear
+    }
+
+    private func scrollToSelectedNote(_ proxy: ScrollViewProxy) {
+        guard model.filteredNotes.indices.contains(model.selectionIndex) else { return }
+        let id = model.filteredNotes[model.selectionIndex].id
+        withAnimation(.easeOut(duration: 0.1)) {
+            proxy.scrollTo(id, anchor: .center)
+        }
     }
 
     private static func relativeTime(from isoString: String) -> String {
