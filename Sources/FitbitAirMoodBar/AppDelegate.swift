@@ -1,5 +1,6 @@
 import AppKit
 import Sparkle
+import os.log
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -14,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var insightsWindowController: InsightsWindowController?
     private var reminderPanelController: ReminderPanelController?
     private var quickNoteWindowController: QuickNoteWindowController?
+    private let tasksModel = TasksModel()
+    private var tasksPanelController: TasksPanelController?
     private var hotKeyCenter: HotKeyCenter?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -30,6 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             toggleQuickNote: { [weak self] in
                 self?.toggleQuickNote()
+            },
+            toggleTasks: { [weak self] in
+                self?.toggleTasks()
             },
             presentReminderPanel: { [weak self] in
                 self?.presentReminderPanel()
@@ -48,6 +54,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onQuickNote: { [weak self] in
                 self?.appState.toggleQuickNote()
+            },
+            onOpenTasks: { [weak self] in
+                self?.appState.toggleTasks()
             },
             onOpenWindow: { [weak self] in
                 self?.appState.openMainWindow()
@@ -87,17 +96,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             HotKeyCenter.Registration(keyCode: 45, modifiers: HotKeyCenter.controlOption) { [weak self] in
                 self?.appState.toggleQuickNote()
             },
+            HotKeyCenter.Registration(keyCode: 17, modifiers: HotKeyCenter.controlOption) { [weak self] in
+                self?.appState.toggleTasks()
+            },
         ])
         NSApp.setActivationPolicy(.accessory)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         quickNoteWindowController?.flushPendingEdits()
+        tasksModel.flush()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         appState.openMainWindow()
         return false
+    }
+
+    // fitbitairmood://tasks|check-in|note — the same toggles the global
+    // hotkeys drive, for Raycast/scripting/agent-driven verification.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            os_log(.info, "URL open: %{public}@", url.absoluteString)
+            switch url.host ?? url.lastPathComponent {
+            case "tasks":
+                appState.toggleTasks()
+            case "check-in":
+                appState.toggleQuickCheckIn()
+            case "note":
+                appState.toggleQuickNote()
+            default:
+                break
+            }
+        }
     }
 
     private func openMainWindow() {
@@ -127,6 +158,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func toggleQuickNote() {
         ensureQuickNoteWindowController().toggle()
+    }
+
+    private func toggleTasks() {
+        ensureTasksPanelController().togglePanel()
     }
 
     private func presentReminderPanel() {
@@ -180,6 +215,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let controller = QuickNoteWindowController(model: appState.quickNoteModel)
         quickNoteWindowController = controller
+        return controller
+    }
+
+    private func ensureTasksPanelController() -> TasksPanelController {
+        if let tasksPanelController {
+            return tasksPanelController
+        }
+
+        let controller = TasksPanelController(model: tasksModel)
+        tasksPanelController = controller
         return controller
     }
 }

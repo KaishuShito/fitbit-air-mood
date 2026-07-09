@@ -23,8 +23,15 @@ rm -rf "$TARGET_BUNDLE"
 rm -rf "$TARGET_ROOT/${APP_NAME}.app"
 /usr/bin/ditto "$DIST_BUNDLE" "$TARGET_BUNDLE"
 
+CODESIGN_IDENTITY="${FITBIT_AIR_MOODBAR_CODESIGN_IDENTITY:-}"
+if [[ -z "$CODESIGN_IDENTITY" ]]; then
+  CODESIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+    | awk -F'"' '/Apple Development/ {print $2; exit}')"
+fi
+CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 if command -v codesign >/dev/null 2>&1; then
-  codesign --force --deep --sign - "$TARGET_BUNDLE" >/dev/null 2>&1 || true
+  codesign --force --deep --sign "$CODESIGN_IDENTITY" "$TARGET_BUNDLE" >/dev/null 2>&1 \
+    || codesign --force --deep --sign - "$TARGET_BUNDLE" >/dev/null 2>&1 || true
 fi
 
 if [[ -x "$LSREGISTER" ]]; then

@@ -10,7 +10,6 @@ private final class MoodReminderPanel: NSPanel {
 final class ReminderPanelController: NSWindowController, NSWindowDelegate {
     private static let basePanelHeight: CGFloat = 420
     private static let fallbackPanelWidth: CGFloat = 360
-    private static let notchWingPadding: CGFloat = 220
     private let appState: AppState
     private let hosting: NSHostingController<CheckInView>
     private let panel: MoodReminderPanel
@@ -95,114 +94,24 @@ final class ReminderPanelController: NSWindowController, NSWindowDelegate {
     }
 
     private func positionPanel() {
-        let screen = screenWithCameraHousing() ?? screenForCurrentPointer() ?? NSScreen.main
-        let panelSize = configurePanel(for: screen)
-        let visibleFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let centerX = cameraHousingCenterX(on: screen) ?? visibleFrame.midX
-        let usesCameraHousing = panelTopInset(on: screen) > 0
-        let topY = usesCameraHousing ? (screen?.frame.maxY ?? visibleFrame.maxY) : visibleFrame.maxY
-        let origin = NSPoint(
-            x: clamped(centerX - (panelSize.width / 2), min: visibleFrame.minX + 12, max: visibleFrame.maxX - panelSize.width - 12),
-            y: topY - panelSize.height
+        let placement = NotchPanelGeometry.placement(
+            baseHeight: Self.basePanelHeight,
+            fallbackWidth: Self.fallbackPanelWidth
         )
-        panel.setFrame(NSRect(origin: origin, size: panelSize), display: false)
-    }
-
-    private static var fallbackPanelSize: NSSize {
-        NSSize(width: fallbackPanelWidth, height: basePanelHeight)
-    }
-
-    private func configurePanel(for screen: NSScreen?) -> NSSize {
-        let topInset = panelTopInset(on: screen)
-        let width = panelWidth(on: screen)
-        let size = NSSize(width: width, height: Self.basePanelHeight + topInset)
         hosting.rootView = CheckInView(
             appState: appState,
             mode: .panel,
             onDismiss: { [weak appState] in
                 appState?.dismissReminderPanel()
             },
-            panelTopInset: topInset,
-            panelWidth: width
+            panelTopInset: placement.topInset,
+            panelWidth: placement.width
         )
-        return size
+        panel.setFrame(placement.frame, display: false)
     }
 
-    private func panelTopInset(on screen: NSScreen?) -> CGFloat {
-        guard
-            let screen,
-            screen.safeAreaInsets.top > 0,
-            cameraHousingCenterX(on: screen) != nil
-        else {
-            return 0
-        }
-
-        return screen.safeAreaInsets.top
-    }
-
-    private func panelWidth(on screen: NSScreen?) -> CGFloat {
-        guard
-            let screen,
-            let left = screen.auxiliaryTopLeftArea,
-            let right = screen.auxiliaryTopRightArea,
-            !left.isEmpty,
-            !right.isEmpty,
-            left.maxX < right.minX
-        else {
-            return Self.fallbackPanelWidth
-        }
-
-        return max(Self.fallbackPanelWidth, (right.minX - left.maxX) + Self.notchWingPadding)
-    }
-
-    private func screenWithCameraHousing() -> NSScreen? {
-        NSScreen.screens.first { screen in
-            guard screen.safeAreaInsets.top > 0 else { return false }
-            guard let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea else {
-                return false
-            }
-            return !left.isEmpty && !right.isEmpty && left.maxX < right.minX
-        }
-    }
-
-    private func cameraHousingCenterX(on screen: NSScreen?) -> CGFloat? {
-        guard
-            let screen,
-            let left = screen.auxiliaryTopLeftArea,
-            let right = screen.auxiliaryTopRightArea,
-            !left.isEmpty,
-            !right.isEmpty,
-            left.maxX < right.minX
-        else {
-            return nil
-        }
-
-        return (left.maxX + right.minX) / 2
-    }
-
-    private func cameraHousingBottomY(on screen: NSScreen?) -> CGFloat? {
-        guard
-            let screen,
-            let left = screen.auxiliaryTopLeftArea,
-            let right = screen.auxiliaryTopRightArea,
-            !left.isEmpty,
-            !right.isEmpty
-        else {
-            return nil
-        }
-
-        return min(left.minY, right.minY)
-    }
-
-    private func screenForCurrentPointer() -> NSScreen? {
-        let location = NSEvent.mouseLocation
-        return NSScreen.screens.first { screen in
-            screen.frame.contains(location)
-        }
-    }
-
-    private func clamped(_ value: CGFloat, min lowerBound: CGFloat, max upperBound: CGFloat) -> CGFloat {
-        Swift.max(lowerBound, Swift.min(value, upperBound))
+    private static var fallbackPanelSize: NSSize {
+        NSSize(width: fallbackPanelWidth, height: basePanelHeight)
     }
 
     nonisolated func windowDidBecomeKey(_ notification: Notification) {

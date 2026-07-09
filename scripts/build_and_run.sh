@@ -66,10 +66,21 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
     <string>Fitbit Air Mood</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleURLName</key>
+        <string>Fitbit Air Mood Actions</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>fitbitairmood</string>
+        </array>
+      </dict>
+    </array>
     <key>CFBundleShortVersionString</key>
-    <string>0.3.1</string>
+    <string>0.4.0</string>
     <key>CFBundleVersion</key>
-    <string>6</string>
+    <string>7</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
@@ -88,8 +99,18 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
+# A stable signing identity keeps the app's TCC identity (Documents-folder
+# permission, notifications) across rebuilds; ad-hoc signing re-prompts every
+# build. Override with FITBIT_AIR_MOODBAR_CODESIGN_IDENTITY.
+CODESIGN_IDENTITY="${FITBIT_AIR_MOODBAR_CODESIGN_IDENTITY:-}"
+if [[ -z "$CODESIGN_IDENTITY" ]]; then
+  CODESIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+    | awk -F'"' '/Apple Development/ {print $2; exit}')"
+fi
+CODESIGN_IDENTITY="${CODESIGN_IDENTITY:--}"
 if command -v codesign >/dev/null 2>&1; then
-  codesign --force --deep --sign - "$APP_BUNDLE" >/dev/null 2>&1 || true
+  codesign --force --deep --sign "$CODESIGN_IDENTITY" "$APP_BUNDLE" >/dev/null 2>&1 \
+    || codesign --force --deep --sign - "$APP_BUNDLE" >/dev/null 2>&1 || true
 fi
 
 echo "Built app bundle: $APP_BUNDLE"

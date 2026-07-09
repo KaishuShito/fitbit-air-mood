@@ -1,5 +1,6 @@
 import Carbon
 import Foundation
+import os.log
 
 final class HotKeyCenter: @unchecked Sendable {
     struct Registration {
@@ -61,6 +62,15 @@ final class HotKeyCenter: @unchecked Sendable {
             )
             if status == noErr, let hotKeyRef {
                 hotKeyRefs.append(hotKeyRef)
+            } else {
+                // Usually means another app owns the combination.
+                os_log(
+                    .error,
+                    "HotKeyCenter: registering hotkey %d (keyCode %d) failed with status %d",
+                    id,
+                    registration.keyCode,
+                    status
+                )
             }
         }
     }

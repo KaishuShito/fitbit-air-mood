@@ -10,12 +10,19 @@ This project is not affiliated with or endorsed by Fitbit, Google, or Apple.
 ## Features
 
 - Menu bar status item with the latest same-day check-in.
-- Quick Check-In HUD with keyboard-first controls.
+- Quick Check-In HUD with keyboard-first controls (⌃⌥M).
+- Quick Note pad with browse and command palettes (⌃⌥N).
+- Tasks panel (⌃⌥T): a notch-anchored markdown editor for a single shared
+  `TASKS.md`, with light heading/checkbox styling, click- or ⌘L-toggled
+  checkboxes, autosave, reload-on-open for external edits, and an in-place
+  expanded mode (⌘O). Shows over fullscreen apps, Spotlight-style.
 - Mood and energy scales, optional notes, and daily Markdown journal append.
 - Local SQLite history at `~/Library/Application Support/FitbitAirMoodBar/checkins.sqlite3`.
 - Weekly insight generation from recent check-ins.
 - Optional hourly reminders and launch-at-login support.
 - Optional Fitbit snapshot sync when used beside a `fitbit-air-cli` workspace.
+- URL scheme for scripting: `fitbitairmood://tasks`, `fitbitairmood://check-in`,
+  and `fitbitairmood://note` toggle the same surfaces as the global hotkeys.
 
 ## Requirements
 

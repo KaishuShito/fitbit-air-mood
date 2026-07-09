@@ -77,7 +77,7 @@ struct JournalConfigResolver {
         return URL(fileURLWithPath: path, isDirectory: true)
     }
 
-    private func ascendForProjectRoot(startingAt start: URL) -> URL? {
+    func ascendForProjectRoot(startingAt start: URL) -> URL? {
         var current = start.standardizedFileURL
         let fileManager = FileManager.default
 
@@ -90,7 +90,12 @@ struct JournalConfigResolver {
                 return current
             }
 
-            let parent = current.deletingLastPathComponent()
+            // deletingLastPathComponent() on "/" yields "/..", so an equality
+            // check alone never terminates; standardizing folds it back.
+            if current.path == "/" {
+                return nil
+            }
+            let parent = current.deletingLastPathComponent().standardizedFileURL
             if parent.path == current.path {
                 return nil
             }

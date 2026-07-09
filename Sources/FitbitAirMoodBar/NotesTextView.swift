@@ -154,7 +154,9 @@ struct NotesTextView: NSViewRepresentable {
     }
 }
 
-private final class CommandFriendlyTextView: NSTextView {
+// Shared by the notes fields and the Tasks editor (subclassed there), so it
+// stays internal and subclassable.
+class CommandFriendlyTextView: NSTextView {
     var onFocusChange: ((Bool) -> Void)?
     var placeholderString: String?
 

@@ -49,6 +49,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let statusSummaryItem = NSMenuItem(title: "No check-in yet today", action: nil, keyEquivalent: "")
     private let onPrimaryActivate: () -> Void
     private let onQuickNote: () -> Void
+    private let onOpenTasks: () -> Void
     private let onOpenWindow: () -> Void
     private let onOpenInsights: () -> Void
     private let onCheckForUpdates: () -> Void
@@ -64,6 +65,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusSummaryProvider: @escaping () -> StatusItemSummary?,
         onPrimaryActivate: @escaping () -> Void,
         onQuickNote: @escaping () -> Void,
+        onOpenTasks: @escaping () -> Void,
         onOpenWindow: @escaping () -> Void,
         onOpenInsights: @escaping () -> Void,
         onCheckForUpdates: @escaping () -> Void,
@@ -77,6 +79,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         self.statusSummaryProvider = statusSummaryProvider
         self.onPrimaryActivate = onPrimaryActivate
         self.onQuickNote = onQuickNote
+        self.onOpenTasks = onOpenTasks
         self.onOpenWindow = onOpenWindow
         self.onOpenInsights = onOpenInsights
         self.onCheckForUpdates = onCheckForUpdates
@@ -124,6 +127,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         quickNoteItem.keyEquivalentModifierMask = [.control, .option]
         quickNoteItem.target = self
         menu.addItem(quickNoteItem)
+
+        let openTasksItem = NSMenuItem(title: "Open Tasks", action: #selector(openTasks), keyEquivalent: "t")
+        openTasksItem.keyEquivalentModifierMask = [.control, .option]
+        openTasksItem.target = self
+        menu.addItem(openTasksItem)
 
         let insightsItem = NSMenuItem(title: "Insights…", action: #selector(openInsights), keyEquivalent: "i")
         insightsItem.keyEquivalentModifierMask = [.command]
@@ -205,6 +213,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     @objc private func quickNote() {
         onQuickNote()
+    }
+
+    @objc private func openTasks() {
+        onOpenTasks()
     }
 
     @objc private func openWindow() {

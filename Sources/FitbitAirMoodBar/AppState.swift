@@ -58,6 +58,7 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
     private var openInsightsWindowHandler: (() -> Void)?
     private var toggleQuickCheckInHandler: (() -> Void)?
     private var toggleQuickNoteHandler: (() -> Void)?
+    private var toggleTasksHandler: (() -> Void)?
     private var presentReminderPanelHandler: (() -> Void)?
     private var dismissReminderPanelHandler: (() -> Void)?
     var checkInsDidChange: (() -> Void)?
@@ -257,6 +258,7 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
         openInsightsWindow: @escaping () -> Void,
         toggleQuickCheckIn: @escaping () -> Void,
         toggleQuickNote: @escaping () -> Void,
+        toggleTasks: @escaping () -> Void,
         presentReminderPanel: @escaping () -> Void,
         dismissReminderPanel: @escaping () -> Void
     ) {
@@ -264,6 +266,7 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
         openInsightsWindowHandler = openInsightsWindow
         toggleQuickCheckInHandler = toggleQuickCheckIn
         toggleQuickNoteHandler = toggleQuickNote
+        toggleTasksHandler = toggleTasks
         presentReminderPanelHandler = presentReminderPanel
         dismissReminderPanelHandler = dismissReminderPanel
     }
@@ -302,6 +305,10 @@ final class AppState: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     func toggleQuickNote() {
         toggleQuickNoteHandler?()
+    }
+
+    func toggleTasks() {
+        toggleTasksHandler?()
     }
 
     func presentReminderPanel() {
