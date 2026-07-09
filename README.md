@@ -22,7 +22,8 @@ This project is not affiliated with or endorsed by Fitbit, Google, or Apple.
 - Optional hourly reminders and launch-at-login support.
 - Optional Fitbit snapshot sync when used beside a `fitbit-air-cli` workspace.
 - URL scheme for scripting: `fitbitairmood://tasks`, `fitbitairmood://check-in`,
-  and `fitbitairmood://note` toggle the same surfaces as the global hotkeys.
+  and `fitbitairmood://note` toggle the same surfaces as the global hotkeys;
+  `fitbitairmood://sync` triggers a Fitbit sync.
 
 ## Requirements
 

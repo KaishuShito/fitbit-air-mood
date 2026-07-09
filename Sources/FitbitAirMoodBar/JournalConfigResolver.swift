@@ -15,15 +15,18 @@ struct JournalConfigResolver {
             .appendingPathComponent("FitbitAirMoodBar", isDirectory: true)
             .appendingPathComponent("checkins.sqlite3")
 
+        // The journal override only replaces the journal folder; the project
+        // root is still needed for the Fitbit CLI, so always detect it.
+        let projectRoot = detectProjectRoot()
+
         if let overridePath = defaults.string(forKey: overrideKey), !overridePath.isEmpty {
             return JournalResolution(
-                projectRoot: nil,
+                projectRoot: projectRoot,
                 journalDirectory: URL(fileURLWithPath: overridePath, isDirectory: true),
                 databaseURL: databaseURL
             )
         }
 
-        let projectRoot = detectProjectRoot()
         let journalDirectory = projectRoot.flatMap(loadJournalDirectory(projectRoot:))
         return JournalResolution(
             projectRoot: projectRoot,

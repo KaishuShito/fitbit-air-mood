@@ -125,6 +125,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 appState.toggleQuickCheckIn()
             case "note":
                 appState.toggleQuickNote()
+            case "sync":
+                appState.syncFitbitNow()
             default:
                 break
             }

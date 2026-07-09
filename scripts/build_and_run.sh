@@ -4,8 +4,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 MONOREPO_DIR="$(cd "$APP_DIR/../.." && pwd)"
+SIBLING_CLI_DIR="$(cd "$APP_DIR/.." && pwd)/fitbit-air-journal"
 if [[ -f "$MONOREPO_DIR/go.mod" && -f "$MONOREPO_DIR/.env" ]]; then
   PROJECT_DIR="$MONOREPO_DIR"
+elif [[ -f "$SIBLING_CLI_DIR/go.mod" && -f "$SIBLING_CLI_DIR/.env" ]]; then
+  # The app repo was split out of the fitbit-air-journal workspace; the
+  # Fitbit CLI still lives there as a sibling checkout.
+  PROJECT_DIR="$SIBLING_CLI_DIR"
 else
   PROJECT_DIR="$APP_DIR"
 fi
